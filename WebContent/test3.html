@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+<head>
+	
+	<title>HTML5 WebSockets</title>
+	<style type="text/css">
+	h1 {
+	 color: blue;
+	 text-align: center;
+	 font-family: "Helvetica Neue", Arial, Sans-Serif;
+	 font-size: 1em;
+	}
+	</style>
+	
+</head>
+<body>
+	 <h1> HTML5 WebSocket chat. </h1>
+	
+	 <input type="button" id="stop-button" value="Stop" />
+	 <br/>
+	  <select id="dSelect" >
+		  <option value="none">Select Device</option>
+		</select> 
+	 <br/>
+	 <div id="mv_screen" align="center">
+            <canvas  id="mv_canvas" width="288" height="512" style="border: solid 1px; cursor: pointer; ">
+                Canvas not supported.
+            </canvas>
+            <canvas  id="mv_canvas" width="288" height="12" style="border: solid 1px; cursor: pointer; ">
+                Canvas not supported.
+            </canvas>
+        </div>
+	 <label id="status-label">Status</label>
+</body>
+<script type="text/javascript">
+	// Find the text view and the button.
+	window.onload = function() {
+		
+		
+		var buttonStop = document.getElementById("stop-button");
+		var label = document.getElementById("status-label");
+		var canvas = document.getElementById("mv_canvas");
+		var resp = true;
+		var obj;
+		if (window.WebSocket) {
+			 console.log("WebSockets supported.");
+			 // Continue with the rest of the WebSockets-specific functionality…
+			var socket = new WebSocket("wss://"+ document.location.host + window.location.pathname.substring(0, window.location.pathname.indexOf('/',2)) +"/chatroom2");
+			socket.binaryType = "arraybuffer";
+			
+			socket.onopen = function(event) {
+				 // Initialize any resources here and display some user-friendly messages.
+				 label.innerHTML = "Connection established!";
+				
+			}
+		 	socket.onmessage = function (event) {
+		 		 /* if (event.data instanceof Object) {
+					 // If the server has sent text data, then display it.
+					 console.log('Response Object type');
+					
+					// label.innerHTML = json.data.devices;
+					// myCanvas(event.data);
+				 }else */ if (typeof event.data === "string") {
+					 console.log('Response String type');
+					 obj = JSON.parse(event.data);
+					 var dSelect = document.getElementById('dSelect');
+					 var deviceName ;
+					 var deviceid ;
+					 for (var devices in obj) {
+						  if (obj.hasOwnProperty(devices)) {
+						    var device = obj[devices];
+						    for (var deviceid in device) {
+						    	  if (device.hasOwnProperty(deviceid)) {
+						    	    deviceName = device[deviceid];
+						    	    dSelect.options[dSelect.options.length] = new Option(deviceName, deviceid);
+						    	  }
+						    	}
+						  }
+						}
+					 dSelect.addEventListener('change', function(e){
+						 socket.send(JSON.stringify({
+				        	    "deviceid":dSelect.value
+				        	}));
+					 }, false)
+				 }else if(event.data instanceof ArrayBuffer ){
+					 console.log('Response ArrayBuffer type');
+					 var binary = '';
+					 var bytes = new Uint8Array( event.data );
+					 var len = bytes.byteLength;
+					 for (var i = 0; i < len; i++) {
+					      binary += String.fromCharCode( bytes[i] );
+					 }
+					 var base64String=  window.btoa( binary );
+					 myCanvas(base64String);
+					 resp = true;
+					
+				   }
+			}
+		 	
+		 	socket.onclose = function(event) {
+		 		 var code = event.code;
+		 		 var reason = event.reason;
+		 		 var wasClean = event.wasClean;
+		 		 if (wasClean) {
+		 			 label.innerHTML = "Connection closed normally.";
+		 		 }
+		 		 else {
+			 		 label.innerHTML = "Connection closed with message " + reason + "(Code: " + code + ")";
+		 		 }
+	 		}
+		 	socket.onerror = function(event) {
+		 		 // Inform the user about the error.
+		 		 label.innerHTML = "Error: " + event;
+		 	}
+		 	var coords;
+		 	var startX,
+		        startY,
+		        endX,
+		        endY,
+		        dist,
+		        threshold = 150, //required min distance traveled to be considered swipe
+		        allowedTime = 200, // maximum time allowed to travel that distance
+		        elapsedTime,
+		        startTime
+		       
+		    function handleswipe(isrightswipe){
+		        if (isrightswipe)
+		            canvas.innerHTML = 'Congrats, you\'ve made a <span style="color:red">right swipe!</span>'
+		        else{
+		            canvas.innerHTML = 'Condition for right swipe not met yet'
+		        }
+		    }
+		 	
+		    canvas.addEventListener('mousedown', function(e){
+		    	var mousePos = getMousePos(canvas, e);
+		       	var x1= Math.round(mousePos.x ) ;
+		    	var y1= Math.round(mousePos.y ) ;
+		        var message = 'Mouse position staring: ' + x1 + ',' + y1;
+		       
+		        writeMessage(canvas, message);
+		        console.log(message);
+		        dist = 0;
+		        startX = x1;
+		        startY = y1;
+		        startTime = new Date().getTime(); // record time when finger first makes contact with surface
+		        e.preventDefault();
+		    }, false)
+		 
+		    canvas.addEventListener('mousemove', function(e){
+		        e.preventDefault(); // prevent scrolling when inside DIV
+		    }, false)
+		 
+		    canvas.addEventListener('mouseup', function(e){
+		    	var mousePos = getMousePos(canvas, e);
+		       	var x2= Math.round(mousePos.x ) ;
+		    	var y2= Math.round(mousePos.y ) ;
+		        var message = 'Mouse position ending: ' + x2 + ',' + y2;
+		        endX=x2;
+		        endY=y2;
+		        writeMessage(canvas, message);
+		        console.log(message);
+		        dist = x2 - startX // get total dist traveled by finger while in contact with surface
+		        elapsedTime = new Date().getTime() - startTime // get time elapsed
+		        // check that elapsed time is within specified, horizontal dist traveled >= threshold, and vertical dist traveled <= 100
+		        var swiperightBol = (elapsedTime <= allowedTime && dist >= threshold && Math.abs(endY - startY) <= 100)
+		        handleswipe(swiperightBol)
+		       
+		        coords = JSON.stringify({
+	        	 	"x1": startX*(ratio*scale*scale),
+	                "y1": startY*(ratio*scale*scale),
+	                "x2": endX*(ratio*scale*scale),
+	                "y2": endY*(ratio*scale*scale),
+	                "action":"swipe"
+	        	});
+		        if (socket.readyState === WebSocket.OPEN) {
+					if(resp == true){
+						socket.send(coords);
+						//socket.send("image");
+						resp = false;
+					}
+					
+					
+				}
+		        e.preventDefault();
+		    }, false)
+		    
+ 		 	buttonStop.onclick = function() {
+		 	 // Close the connection, if open.
+		 	 if (socket.readyState === WebSocket.OPEN) {
+		 		//socket.close();
+		 		socket.close(1000, "Deliberate disconnection");
+		 	 }
+		 	}
+		 	function writeMessage(canvas, message) {
+		 		label.innerHTML=message;
+		    }
+	      	function getMousePos(canvas, evt) {
+		       var rect = canvas.getBoundingClientRect();
+		       scaleX = canvas.width / rect.width,    // relationship bitmap vs. element for X
+		       scaleY = canvas.height / rect.height;  // relationship bitmap vs. element for Y
+
+			   return {
+			     x: (evt.clientX - rect.left) * scaleX,   // scale mouse coordinates after they have
+			     y: (evt.clientY - rect.top) * scaleY     // been adjusted to be relative to element
+			   }
+	      	}
+	    
+		 	
+		}else {
+		 console.log("WebSockets not supported.");
+		 alert("Consider updating your browser for a richer experience.");
+		}
+		var ratio;
+		var scale=2.5;
+		function myCanvas(base64String) {
+		    var canvas = document.getElementById("mv_canvas");
+		    var ctx = canvas.getContext("2d");
+		   	var image = new Image();
+			image.src ="data:image/png;base64,"+base64String;
+			canvas.width= image.naturalWidth/scale;
+			canvas.height= image.naturalHeight/scale;
+			var ratioX = canvas.width / image.naturalWidth;
+		   	var ratioY = canvas.height / image.naturalHeight;
+		    //console.log("ratioX ::"+ratioX);
+		   	//console.log("ratioY ::"+ratioY);
+		   	ratio = Math.min(ratioX, ratioY);
+		   	console.log("ratio ::"+ratio);
+		   // ctx.drawImage(image,10,10);
+		    ctx.drawImage(image, 0, 0, image.naturalWidth * ratio, image.naturalHeight * ratio);
+		}
+	}
+	
+	//https://rj.clictest.com:8443/DemoWebSocket/test3.html
+
+</script>
+
+</html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+	
+	<title>HTML5 WebSockets</title>
+	<style type="text/css">
+	h1 {
+	 color: blue;
+	 text-align: center;
+	 font-family: "Helvetica Neue", Arial, Sans-Serif;
+	 font-size: 1em;
+	}
+	</style>
+</head>
+<body>
+	 <h1> HTML5 WebSocket chat. </h1>
+	
+	 <input type="button" id="stop-button" value="Stop" />
+	 <br/>
+	 <div id="mv_screen" align="center">
+            <canvas  id="mv_canvas" width="360" height="640" style="border: solid 1px; cursor: pointer; ">
+                Canvas not supported.
+            </canvas>
+        </div>
+	 <label id="status-label">Status</label>
+</body>
+<script type="text/javascript">
+	// Find the text view and the button.
+	window.onload = function() {
+		
+		
+		var buttonStop = document.getElementById("stop-button");
+		var label = document.getElementById("status-label");
+		var canvas = document.getElementById("mv_canvas");
+		var resp = true;
+		var ratio;
+		var scale=2;
+		if (window.WebSocket) {
+			 console.log("WebSockets supported.");
+			 // Continue with the rest of the WebSockets-specific functionality…
+			var socket = new WebSocket("wss://"+ document.location.host + window.location.pathname.substring(0, window.location.pathname.indexOf('/',2)) +"/chatroom2");
+			socket.binaryType = "arraybuffer";
+			
+			socket.onopen = function(event) {
+				 // Initialize any resources here and display some user-friendly messages.
+				 label.innerHTML = "Connection established!";
+			}
+		 	socket.onmessage = function (event) {
+				 if (typeof event.data === "string") {
+					 // If the server has sent text data, then display it.
+					 label.innerHTML = event.data;
+					// myCanvas(event.data);
+				 }else if(event.data instanceof ArrayBuffer ){
+					 var binary = '';
+					 var bytes = new Uint8Array( event.data );
+					 var len = bytes.byteLength;
+					 for (var i = 0; i < len; i++) {
+					      binary += String.fromCharCode( bytes[i] );
+					 }
+					 var base64String=  window.btoa( binary );
+					
+					 myCanvas(base64String);
+					 resp = true;
+					 /* 
+					 var tempcanvas = document.getElementById("mv_canvas");
+                     var tempcontext = tempcanvas.getContext('2d');
+	
+	                 var imgdata = tempcontext.getImageData(0,0, tempcanvas.width,tempcanvas.height);
+	
+	                 var imgdatalen = imgdata.data.length;
+	
+	                 for(var i=8;i<imgdatalen;i++)
+	                 {
+	                     imgdata.data[i] = bytearray[i];
+	                 }
+	
+	                 tempcontext.putImageData(imgdata,0,0);
+					// label.innerHTML = event.data;
+				     console.log("Received arraybuffer"); */
+				   }
+			}
+		 	
+		 	socket.onclose = function(event) {
+		 		 var code = event.code;
+		 		 var reason = event.reason;
+		 		 var wasClean = event.wasClean;
+		 		 if (wasClean) {
+		 			 label.innerHTML = "Connection closed normally.";
+		 		 }
+		 		 else {
+			 		 label.innerHTML = "Connection closed with message " + reason + "(Code: " + code + ")";
+		 		 }
+	 		}
+		 	socket.onerror = function(event) {
+		 		 // Inform the user about the error.
+		 		 label.innerHTML = "Error: " + event;
+		 	}
+		 	var coords;
+		 	/* canvas.onload = function(evt) {
+		       socket.send(JSON.stringify({"image": 1}));
+			} */
+			canvas.ondrag = function(evt) {
+				var mousePos = getMousePos(canvas, evt);
+		       	var x= Math.round(mousePos.x ) ;
+		    	var y= Math.round(mousePos.y ) ;
+		        var message = 'Mouse position: ' + x*scale + ',' + y*scale;
+		        coords = JSON.stringify({
+	                "x": x*scale,
+	                "y": y*scale
+	       		});
+		        writeMessage(canvas, message);
+			};
+ 
+ 			canvas.onclick = function(evt) {
+	 			var mousePos = getMousePos(canvas, evt);
+		       	var x= Math.round(mousePos.x ) ;
+		    	var y= Math.round(mousePos.y ) ;
+		        var message = 'Mouse position: ' + x*scale + ',' + y*scale;
+		        coords = JSON.stringify({
+	                "x": x*scale,
+	                "y": y*scale
+	       		});
+		        writeMessage(canvas, message);
+		       // Send the data if the connection is open.
+				if (socket.readyState === WebSocket.OPEN) {
+					if(resp == true){
+						socket.send(coords);
+						//socket.send("image");
+						resp = false;
+					}
+					
+					
+				}
+			}
+		 	buttonStop.onclick = function() {
+		 	 // Close the connection, if open.
+		 	 if (socket.readyState === WebSocket.OPEN) {
+		 		//socket.close();
+		 		socket.close(1000, "Deliberate disconnection");
+		 	 }
+		 	}
+		 	function writeMessage(canvas, message) {
+		 		label.innerHTML=message;
+		    }
+	      	function getMousePos(canvas, evt) {
+		       var rect = canvas.getBoundingClientRect();
+		       scaleX = canvas.width / rect.width,    // relationship bitmap vs. element for X
+		       scaleY = canvas.height / rect.height;  // relationship bitmap vs. element for Y
+
+			   return {
+			     x: (evt.clientX - rect.left) * scaleX,   // scale mouse coordinates after they have
+			     y: (evt.clientY - rect.top) * scaleY     // been adjusted to be relative to element
+			   }
+	      	}
+		    
+		 	
+		}else {
+		 console.log("WebSockets not supported.");
+		 alert("Consider updating your browser for a richer experience.");
+		}
+		
+		function myCanvas(base64String) {
+			var canvas = document.getElementById("mv_canvas");
+		    var ctx = canvas.getContext("2d");
+		   	var image = new Image();
+			image.src ="data:image/png;base64,"+base64String;
+			var ratioX = canvas.width / (image.naturalWidth/scale);
+		   	var ratioY = canvas.height / (image.naturalHeight/scale);
+		   	console.log("ratioX ::"+ratioX);
+		   	console.log("ratioY ::"+ratioY);
+		   	ratio = Math.min(ratioX, ratioY);
+		   	console.log("ratio ::"+ratio);
+		   // ctx.drawImage(image,10,10);
+		    ctx.drawImage(image, 0, 0, image.naturalWidth * ratio/scale, image.naturalHeight * ratio/scale);
+		}
+	}
+	// https://predev.clictest.com:8443/ObjectSpyMobileService/test.html
+
+</script>
+
+</html>
